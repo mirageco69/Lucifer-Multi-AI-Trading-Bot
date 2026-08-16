@@ -342,9 +342,9 @@ LUCIFER sends Telegram messages for:
 |---|---|---|
 | **OS** | Windows 10 64-bit | Windows 11 Pro 64-bit |
 | **CPU** | Intel Core i5 (any gen) | Intel Core i7 / AMD Ryzen 7 |
-| **RAM** | 8 GB | **16 GB** — required if running local LLMs |
-| **Storage** | 50 GB free | 1 TB SSD — data accumulates over months |
-| **GPU** | Not required | NVIDIA 8 GB+ VRAM — recommended for local LLMs |
+| **RAM** | 16 GB | **32 GB + ** — required if running local LLMs |
+| **Storage** | 250 GB free | 1 TB SSD — data accumulates over months |
+| **GPU** | NVIDIA 8 GB VRAM | NVIDIA 8 GB+ VRAM (Built on a RTX5060 ti) — recommended for local LLMs |
 | **Python** | 3.10+ | **3.11+** |
 | **Node.js** | 18+ | **20 LTS** |
 | **Ollama** | Required for AI | Latest |
