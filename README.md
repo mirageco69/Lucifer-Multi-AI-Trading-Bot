@@ -342,9 +342,9 @@ LUCIFER sends Telegram messages for:
 |---|---|---|
 | **OS** | Windows 10 64-bit | Windows 11 Pro 64-bit |
 | **CPU** | Intel Core i5 (any gen) | Intel Core i7 / AMD Ryzen 7 |
-| **RAM** | 16 GB | **32 GB + ** — required if running local LLMs |
+| **RAM** | 16 GB | **32 GB+** — recommended if running local LLMs |
 | **Storage** | 250 GB free | 1 TB SSD — data accumulates over months |
-| **GPU** | NVIDIA 8 GB VRAM | NVIDIA 8 GB+ VRAM (Built on a RTX5060 ti) — recommended for local LLMs |
+| **GPU** | NVIDIA 8 GB VRAM | NVIDIA 8 GB+ VRAM — built and tested on RTX 5060 Ti |
 | **Python** | 3.10+ | **3.11+** |
 | **Node.js** | 18+ | **20 LTS** |
 | **Ollama** | Required for AI | Latest |
@@ -374,11 +374,11 @@ LUCIFER sends Telegram messages for:
 - LLM Prompt Editor — edit all AI prompts from dashboard
 - Plugin Doctor — automated plugin health diagnostics
 - Supervisor auto-restart at Windows login
+- Mission Control movable/resizable widget cards
 
 ### In Progress 🔄
-- Mission Control movable/resizable widget cards
 - Commodity strategy engines (carry, seasonal, relative value, term structure)
-- Re-enable live buying after paper-trade validation
+- Live buying validation — currently paper trading only; IG Markets demo account support in progress
 
 ### Planned 📋
 - Mobile app (Android — PWA wrapper + Telegram push bridge)
