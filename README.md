@@ -275,17 +275,16 @@ Full paper-trading mode using real live market data. Switches to dry-run at the 
 - [x] IG Brain fully wired — IG-Brain + IG-BrainExecutor threads; brain_orders_ig.json queue
 - [x] Research → Brain pipeline — research agent + optimizer write findings to ReasoningBank
 - [x] Brain Console terminal widget — live decision feed on Mission Control
+- [x] Telegram breadth alerts — fires when market turns extreme (strong/weak breadth threshold)
+- [x] Macro calendar auto-populate — ForexFactory feed, refreshes every 6 hours
+- [x] Commodity strategy engines — trend, carry, seasonal, relative value, calendar spreads
 
 ### In Progress
-- [ ] Macro calendar auto-populate feed (macro gate currently inactive)
-- [ ] Commodity strategy engines (trend, carry, seasonal, relative value)
-- [ ] Brain `paper_only` flag flip to live (pending debate quality validation)
+- [ ] Brain live trading — currently paper mode; accumulating debate history before enabling real orders
+- [ ] A/B prompt auto-bootstrap — framework planned; auto-creates control experiments for all 7 agents
 
 ### Future
 - [ ] Mobile app (Android — PWA wrapper + push notifications)
-- [ ] Telegram breadth alerts
-- [ ] A/B prompt experiment auto-bootstrap (framework built, experiments pending)
-- [ ] Macro calendar feed (Gate 6 currently inactive)
 
 ---
 
