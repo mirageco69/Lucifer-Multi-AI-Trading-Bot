@@ -1,17 +1,6 @@
 # LUCIFER — Setup & Installation Guide
 
-> Full guide for installing LUCIFER on a dedicated Windows machine from scratch.
-
----
-
-## Before You Start
-
-LUCIFER is a 24/7 trading platform. It is not a script you run occasionally — it runs continuously, manages real money (or simulated money in paper mode), and makes time-sensitive decisions. For best results:
-
-- Use a **dedicated machine** that stays on permanently. Don't share it with your main workstation.
-- Start in **paper trading mode** and watch the bot's behaviour for at least a week before enabling live trading.
-- Read the Security section before exposing the dashboard to the internet.
-- Never share your `.env` file or API keys with anyone.
+> This guide covers a fresh installation of the LUCIFER trading platform on a dedicated Windows machine.
 
 ---
 
@@ -21,364 +10,282 @@ LUCIFER is a 24/7 trading platform. It is not a script you run occasionally — 
 |---|---|---|
 | **OS** | Windows 10 64-bit | Windows 11 Pro 64-bit |
 | **CPU** | Intel Core i5 (any gen) | Intel Core i7 / AMD Ryzen 7 |
-| **RAM** | 8 GB | **16 GB** — required if running local LLMs |
-| **Storage** | 50 GB free | 1 TB HDD/SSD — data accumulates over months |
-| **GPU** | Not required | NVIDIA GPU with 8 GB+ VRAM recommended for local LLMs |
-| **Python** | 3.10+ | **3.11+** (strongly recommended) |
+| **RAM** | 16 GB | **32 GB+** — recommended if running local LLMs |
+| **Storage** | 250 GB free | 1 TB SSD — data accumulates over months |
+| **GPU** | NVIDIA 8 GB VRAM | NVIDIA 8 GB+ VRAM — built and tested on RTX 5060 Ti |
+| **Python** | 3.10+ | **3.11+** |
 | **Node.js** | 18+ | **20 LTS** |
-| **Ollama** | Required for AI gate | Latest stable release |
-| **Network** | Broadband | Broadband with static IP or DDNS for remote access |
+| **Ollama** | Latest | Latest |
+| **Network** | Broadband | Broadband — static IP or DDNS recommended for remote access |
 
-> **Note**: All production testing has been done on Windows 11 Pro with an Intel Core i7, 16 GB RAM, and a 1 TB HDD. That is the reference configuration.
+> A **dedicated always-on machine** is strongly recommended. LUCIFER runs 24/7 and should not share a primary workstation. Built and tested on Windows 11 Pro with an NVIDIA RTX 5060 Ti.
 
 ### GPU Notes
 
-A GPU is **not required** — LUCIFER will run without one. However, it matters for the local AI components:
+An NVIDIA GPU with at least 8 GB VRAM is the minimum recommended for running local LLMs at usable speed.
 
-- **Without GPU**: Local LLMs (llama3.1:8b, phi3:mini) run on CPU. Expect 10–60 second response times per trade analysis depending on your CPU. The bot compensates with a longer AI timeout.
-- **With GPU (NVIDIA 8 GB+ VRAM)**: Response times drop to 1–5 seconds. Enables the Visual Agent (qwen3-coder:30.5b at ~18 GB requires 24 GB VRAM or CPU offload).
-- **VRAM recommendations**:
-  - 8 GB VRAM → `phi3:mini` runs fully on GPU (fast), `llama3.1:8b` offloads some layers
-  - 12 GB VRAM → `llama3.1:8b` runs fully on GPU
-  - 24 GB VRAM → full Visual Agent on GPU
+- **Without GPU**: LLMs run on CPU — expect 10–60 seconds per trade analysis
+- **8 GB VRAM**: `qwen3:8b` fully on GPU — recommended minimum for the AI Brain
+- **16 GB VRAM**: `qwen3:8b` + `qwen2.5:14b` both on GPU — full Brain capability
+- **24 GB VRAM**: All models on GPU including Plugin Doctor reviewer (`mistral-nemo:12b`)
 
-> NVIDIA cards only — Ollama on Windows supports CUDA. AMD GPU (ROCm) is experimental and not tested. CPU inference works on any machine.
+> NVIDIA (CUDA) only on Windows. AMD ROCm is experimental and untested.
 
 ---
 
 ## Prerequisites
 
-Install these before touching the LUCIFER files.
-
 ### 1. Python 3.11+
+Download from [python.org](https://python.org). During install, check **"Add Python to PATH"**.
 
-Download from **python.org** — do **not** use the Microsoft Store version (it cannot run passwordless scheduled tasks, which the supervisor requires).
-
-During installation:
-- ✅ Check **"Add Python to PATH"**
-- ✅ Check **"Install for all users"** (if prompted)
-
-Verify:
 ```
-python --version
-# Should show: Python 3.11.x or higher
+python --version   # should show 3.11 or higher
 ```
 
 ### 2. Node.js 20 LTS
-
-Download from **nodejs.org** — choose the **LTS** release, not the Current release.
-
-Verify:
-```
-node --version    # Should show: v20.x.x
-npm --version     # Should show: 10.x.x or higher
-```
-
-### 3. Ollama (Local AI)
-
-Download from **ollama.com** and install. Ollama runs as a background service on `http://localhost:11434`.
-
-After installing, pull the required models:
+Download from [nodejs.org](https://nodejs.org). Choose the LTS release.
 
 ```
-ollama pull llama3.1:8b
+node --version     # should show v20.x
+npm --version
 ```
 
-This is the primary pre-trade gate model (~4.7 GB download).
+### 3. Ollama (for local AI)
+Download from [ollama.com](https://ollama.com) and install. Then pull the required models:
 
 ```
-ollama pull phi3:mini
+ollama pull qwen3:8b
+ollama pull qwen2.5:14b
 ```
 
-This is the fast fallback model used when `llama3.1:8b` times out (~2.2 GB).
+`qwen3:8b` is used for all real-time Brain agents. `qwen2.5:14b` is used for the Risk Manager agent and nightly reflection (deeper reasoning, runs overnight).
 
-For the Visual Agent (chart screenshot analysis — optional):
+For the Plugin Doctor reviewer, also pull:
 ```
-ollama pull qwen3-coder:30.5b
-```
-
-> This model is large (~18 GB). Only pull it if you plan to use the Visual Agent feature.
-
-Verify Ollama is running:
-```
-ollama list
-# Should show the pulled models
+ollama pull mistral-nemo:12b
 ```
 
-### 4. mkcert (HTTPS Certificate)
+> All LLM inference is local — no cloud API calls are made. Ollama must be running before starting the bot.
 
-LUCIFER serves the dashboard over HTTPS. You need a locally trusted certificate.
+### 4. mkcert (for HTTPS)
+LUCIFER serves the dashboard over HTTPS. Install mkcert to generate a local trusted certificate.
 
-1. Download `mkcert-v1.x.x-windows-amd64.exe` from the mkcert GitHub releases page
-2. Rename it to `mkcert.exe`
-3. Place it in a folder on your PATH (e.g. `C:\Windows\System32\` or a custom tools folder)
-4. Run:
+Download `mkcert-v1.x.x-windows-amd64.exe` from the mkcert GitHub releases page. Rename it to `mkcert.exe` and place it in a folder on your PATH, then:
 
 ```
 mkcert -install
 ```
 
-This installs a local Certificate Authority that your browser will trust.
-
-> On any **other** machine that will access the dashboard over the network, you also need to run `mkcert -install` on that machine to trust the local CA — otherwise the browser will show a certificate warning.
-
-### 5. Git (Optional)
-
-Only needed if you are receiving updates via git. Download from **git-scm.com**.
+This installs a local Certificate Authority so your browser trusts the self-signed cert.
 
 ---
 
 ## Installation
 
-### Step 1 — Place the Project
+### Step 1 — Copy the Project
 
-Copy or clone the project to:
+Place the project at `C:\projects\tradingbot\` (this path is expected by the supervisor and scripts).
+
+### Step 2 — Create Python Virtual Environment
+
 ```
-C:\projects\tradingbot\
-```
-
-This path is expected by the supervisor script and internal references. Using a different path requires updating `scripts/supervisor.ps1`.
-
-### Step 2 — Python Virtual Environment
-
-Open PowerShell and run:
-
-```powershell
 cd C:\projects\tradingbot
 python -m venv venv_bot
 venv_bot\Scripts\activate
 pip install -r requirements.txt
 ```
 
-This creates an isolated Python environment. All dependencies install into `venv_bot\` — nothing touches your system Python.
-
-If you see errors during `pip install`, try:
-```powershell
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
 ### Step 3 — Install Dashboard Dependencies
 
-```powershell
-cd C:\projects\tradingbot\dashboard-new
+```
+cd dashboard-new
 npm install
 npm run build
 ```
 
-The build output goes to `dashboard-new/dist/`. Flask serves this as the dashboard frontend.
+The build output goes to `dashboard-new/dist/` and is served by Flask.
 
-> First build may take 2–5 minutes — npm downloads all frontend dependencies.
+### Step 4 — Generate TLS Certificate
 
-### Step 4 — Generate the TLS Certificate
-
-```powershell
+```
 cd C:\projects\tradingbot\ssl
 mkcert -cert-file cert.pem -key-file key.pem localhost 127.0.0.1 192.168.x.x
 ```
 
-Replace `192.168.x.x` with your machine's actual LAN IP address. You can find it with:
-```
-ipconfig
-```
-Look for "IPv4 Address" under your active network adapter.
+Replace `192.168.x.x` with your machine's LAN IP address. The dashboard will be available at `https://<your-ip>:5443`.
 
-The dashboard will be accessible at:
-- `https://localhost:5443` (on the bot machine itself)
-- `https://192.168.x.x:5443` (from other machines on your network)
+> On any other machine that will access the dashboard, you must also run `mkcert -install` to trust the local CA.
 
-### Step 5 — Configure Your Environment
+### Step 5 — Configure Environment
 
-Copy the environment template:
-```powershell
-copy .env.example .env
-```
-
-Open `.env` in a text editor and fill in your credentials:
+Copy `.env.example` to `.env` and fill in your credentials:
 
 ```ini
-# ── Exchange API Keys ──────────────────────────────────────────────
+# Exchange API Keys
+COINSPOT_API_KEY=your_key_here
+COINSPOT_API_SECRET=your_secret_here
 
-# CoinSpot (Australian crypto exchange)
-COINSPOT_API_KEY=your_coinspot_api_key
-COINSPOT_API_SECRET=your_coinspot_api_secret
+SWYFTX_API_KEY=your_key_here
 
-# Swyftx (Australian crypto exchange)
-SWYFTX_API_KEY=your_swyftx_api_key
+BYBIT_API_KEY=your_key_here
+BYBIT_API_SECRET=your_secret_here
 
-# Bybit (international crypto exchange)
-BYBIT_API_KEY=your_bybit_api_key
-BYBIT_API_SECRET=your_bybit_api_secret
+IG_API_KEY=your_key_here
+IG_USERNAME=your_username
+IG_PASSWORD=your_password
+IG_ACCOUNT_TYPE=DEMO   # or LIVE
 
-# IG Markets (CFDs and commodities)
-IG_API_KEY=your_ig_api_key
-IG_USERNAME=your_ig_username
-IG_PASSWORD=your_ig_password
-IG_ACCOUNT_TYPE=DEMO        # Use DEMO until you are ready for live trading
+# Dashboard
+DASHBOARD_SECRET_KEY=generate_a_random_string_here
 
-# ── Dashboard ─────────────────────────────────────────────────────
-
-# Generate a long random string — this signs JWT tokens
-DASHBOARD_SECRET_KEY=change_this_to_a_long_random_string_at_least_32_chars
-
-# ── Telegram (Optional but recommended) ──────────────────────────
-
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-TELEGRAM_CHAT_ID=your_telegram_chat_id
-
-# ── Claude API (Optional — for cloud AI gate) ────────────────────
-
-ANTHROPIC_API_KEY=your_claude_api_key
+# Telegram (optional)
+TELEGRAM_BOT_TOKEN=your_token
+TELEGRAM_CHAT_ID=your_chat_id
 ```
 
-> ⚠️ **Never commit `.env` to version control.** It is in `.gitignore`. Treat it like a password.
+> Never commit `.env` to version control. It is in `.gitignore`. The platform uses local LLMs only — no cloud AI API keys are required or used.
 
 ### Step 6 — Initial Settings
 
-Edit `data/settings.json` with your starting configuration. If this file doesn't exist, create it:
+Edit `data/settings.json` to configure your trading parameters. At minimum:
 
 ```json
 {
   "dry_run": true,
   "buying_enabled": false,
   "coinspot_active_coins": ["BTC", "ETH"],
-  "swyftx_active_coins": ["BTC", "ETH"],
   "trade_size_aud": 100,
-  "min_trade_size_aud": 50,
-  "max_daily_drawdown_pct": 5.0,
-  "stop_loss_pct": 3.0,
-  "trailing_stop_pct": 2.0
+  "min_trade_size_aud": 50
 }
 ```
 
-**Keep `dry_run: true` and `buying_enabled: false` until you have watched the bot running in paper mode and are satisfied with its behaviour.**
+**Start with `dry_run: true` and `buying_enabled: false` until you have verified the bot is operating correctly.**
 
-### Step 7 — First-Time Admin Account
+### Step 7 — Start the Platform
 
-On first run, the dashboard will prompt you to create an admin account. Set a strong password and save it somewhere secure. You can enable 2FA after logging in.
-
-### Step 8 — Test Launch
-
-Before setting up auto-start, run everything manually first to verify it works:
-
-**Terminal 1 — Start the bot:**
-```powershell
-cd C:\projects\tradingbot
-venv_bot\Scripts\python.exe bot.py
-```
-
-**Terminal 2 — Start the dashboard:**
-```powershell
-cd C:\projects\tradingbot
-venv_bot\Scripts\python.exe src\app.py
-```
-
-Open your browser and go to `https://localhost:5443`. You should see the LUCIFER dashboard login page.
-
-If everything loads correctly, stop both processes (Ctrl+C) and proceed to Step 9.
-
-### Step 9 — Set Up Auto-Start (Supervisor)
-
-The supervisor script starts and monitors all processes automatically when Windows logs in.
-
-Open PowerShell as Administrator and run:
+Run the supervisor script to start all processes:
 
 ```powershell
-schtasks /create /tn "LUCIFER Supervisor" /tr "powershell.exe -NonInteractive -WindowStyle Hidden -File C:\projects\tradingbot\scripts\supervisor.ps1" /sc onlogon /rl highest /f
+C:\projects\tradingbot\scripts\supervisor.ps1
 ```
 
-This creates a Task Scheduler task that:
-- Runs at login (no password prompt required)
-- Runs with highest privileges
-- Starts `supervisor.ps1` which launches and monitors all processes
+The supervisor starts and monitors all configured processes, restarting them automatically if they crash. It is set up to run at Windows logon via Task Scheduler.
 
-To verify the task was created:
+To restart all processes manually:
+
 ```powershell
-schtasks /query /tn "LUCIFER Supervisor"
+C:\projects\tradingbot\scripts\restart_all.ps1
 ```
 
-**Log out and back in** to test that the supervisor starts automatically. Then check `https://localhost:5443` — the dashboard should be up without you manually starting anything.
+### Step 8 — Access the Dashboard
 
-Supervisor logs are written to `logs/supervisor.log`.
+Open your browser and navigate to:
+```
+https://localhost:5443
+```
+or from another machine on your network:
+```
+https://192.168.x.x:5443
+```
+
+Log in with the admin credentials set during first-run setup.
 
 ---
 
-## Exchange API Setup
+## Auto-Start at Login (Supervisor)
+
+The supervisor (`scripts/supervisor.ps1`) runs at Windows logon via Task Scheduler, starting and monitoring all configured processes without a password prompt.
+
+> **Note**: The Store version of Python (from the Microsoft Store) does not support passwordless Task Scheduler tasks. Use the python.org installer.
+
+---
+
+## AI Brain
+
+LUCIFER includes a 7-agent autonomous trading brain built entirely on local Ollama — no cloud API calls are ever made.
+
+### How it works
+
+When the Brain is enabled, it is the **sole buy authority**. The bot's own signal-triggered buys are blocked. Instead:
+
+1. The Brain debate loop runs every 60 seconds
+2. Six specialist agents debate the market context
+3. A Risk Manager (using `qwen2.5:14b`) makes the final call
+4. BUY decisions are queued to `data/brain_orders.json`
+5. A dedicated executor thread picks up the queue every 15 seconds and places the order
+
+### Exit logic
+
+Fixed stop-losses are replaced with intelligent exit debates. When a position hits −3%, the Brain runs a 2-agent debate (Recovery Analyst + Risk Arbiter) before deciding to hold or cut. The floor tightens on each HOLD (−3% → −6% → −8% → −10%). Hard exits bypass debate: −10%, regime flip to BEAR, 7-day hold cap.
+
+### Nightly reflection (ReasoningBank)
+
+At **2am every night**, the Brain reviews all closed trades from the day and extracts patterns into the ReasoningBank — a local RAG memory consulted during every future debate. This runs for both crypto and IG Markets trades.
+
+**Why 2am?**
+- Crypto: markets are 24/7, so 2am is low-volatility and avoids interrupting active positions
+- IG Markets (Australia): session closes ~10pm AEST. 2am gives 4 hours of closed-trade data to reflect on before the next open at 8am AEST
+
+The reflection model (`qwen2.5:14b`) takes 5–15 minutes — this is expected. Ollama handles it in the background without affecting live trading.
+
+### Watchlist discovery
+
+Every 4 hours, the Brain paper-evaluates the best candidates from the 72-coin watchlist. BUY decisions go to a paper portfolio only. After 3 paper wins, a Telegram alert suggests promoting the coin to the live list.
+
+### Enabling the Brain
+
+In `data/settings.json` or from the dashboard (AI workspace → Brain Settings):
+
+```json
+{
+  "ai_brain_enabled": true,
+  "ai_brain_paper_only": true
+}
+```
+
+Set `ai_brain_paper_only: false` only when you are satisfied with the quality of debates shown in the Brain Console (Mission Control → Brain Console widget).
+
+---
+
+## First-Time API Setup
 
 ### CoinSpot
-1. Log in to CoinSpot → **Account** → **API Keys**
-2. Click **Create New Key**
-3. Enable **Trading** permissions (read + trade; do not enable withdrawal)
-4. Copy the **API Key** and **API Secret** to `.env`
+1. Log in to CoinSpot → Account → API Keys
+2. Create a new key with **Trading** permissions
+3. Copy key and secret to `.env`
 
 ### Swyftx
-1. Log in to Swyftx → **Profile** (top right) → **API Management**
-2. Click **Generate API Key**
-3. Copy the key to `.env`
+1. Log in to Swyftx → Profile → API Management
+2. Generate a new API key
+3. Copy to `.env`
 
 ### Bybit
-1. Log in to Bybit → **Account & Security** → **API Management**
-2. Click **Create New Key**
-3. Enable **Read** and **Trade** permissions. Do not enable withdrawal.
-4. Set an IP whitelist if possible (use your bot machine's public IP)
-5. Copy **API Key** and **Secret Key** to `.env`
+1. Log in to Bybit → Account & Security → API Management
+2. Create key with **Trade** and **Read** permissions
+3. Copy key and secret to `.env`
 
 ### IG Markets
-1. Log in to IG → **My IG** (top right) → **Manage API Keys**
-2. Create a new API key
-3. Copy the key to `.env`
-4. Use your IG username and password as `IG_USERNAME` and `IG_PASSWORD`
-5. Set `IG_ACCOUNT_TYPE=DEMO` initially
+1. Log in to IG → My IG → API
+2. Create an API key
+3. Use your IG username and password alongside the key in `.env`
+4. Set `IG_ACCOUNT_TYPE=DEMO` to start — switch to `LIVE` only when ready
 
-> IG's DEMO account uses a separate environment with virtual funds. It is ideal for testing. When you switch to `LIVE`, real money is used.
+**IG trading hours (AEST):** Sunday 8am – Friday 10pm. The IG Brain automatically checks whether the session is open before placing any orders.
 
-### Telegram Bot Setup
-1. Open Telegram and search for **@BotFather**
-2. Send `/newbot` and follow the prompts
-3. Choose a name and username for your bot
-4. Copy the **token** BotFather gives you to `TELEGRAM_BOT_TOKEN`
-5. Start your new bot (search for it and press Start)
-6. Send it any message, then visit:
-   `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`
-7. Find the `chat.id` value in the response — copy it to `TELEGRAM_CHAT_ID`
-
----
-
-## Configuring Telegram Alerts
-
-Once your bot token and chat ID are in `.env`, go to **Settings → System → Telegram** in the dashboard to configure which alerts fire:
-
-| Alert | Recommended Setting |
-|---|---|
-| Trade executed | ✅ On |
-| AI gate blocked | ✅ On |
-| Daily P&L report | ✅ On (set your preferred time) |
-| Stop-loss triggered | ✅ On |
-| System health warning | ✅ On |
-| Bot started / stopped | ✅ On |
-| 2FA codes | ✅ On (required for 2FA login) |
-
-Test by clicking **Send Test Message** in the dashboard.
+### Telegram Bot (Optional)
+1. Message `@BotFather` on Telegram → `/newbot`
+2. Copy the token to `.env`
+3. Send a message to your bot, then find your chat ID from the Telegram API
+4. Copy chat ID to `.env`
 
 ---
 
 ## Enabling Live Trading
 
-LUCIFER ships with all trading disabled. The path to live trading:
+LUCIFER ships with trading disabled for safety.
 
-**Step 1 — Paper trade for at least a week**
-Watch the bot's decisions in paper mode. Check the Reasoning Bank daily — are the AI decisions sensible? Is the strategy performing as expected?
+When you are confident the bot is behaving correctly in paper mode, enable live trading in `data/settings.json`:
 
-**Step 2 — Review the risk settings**
-In Settings → Risk, confirm:
-- Stop-loss percentage is appropriate for your risk tolerance
-- Daily drawdown limit is set
-- Position size is what you intended
-- Exposure limits are conservative
-
-**Step 3 — Enable trading**
-
-In `data/settings.json`:
 ```json
 {
   "dry_run": false,
@@ -386,113 +293,73 @@ In `data/settings.json`:
 }
 ```
 
-Or from the dashboard: **Settings → Trading → Dry Run Mode → switch off**.
+Or toggle it from the dashboard: **Settings → Trading → Dry Run Mode**.
 
-Or from the ribbon bar at the top of the dashboard: click **Paper Trading** to toggle live mode.
-
-> ⚠️ Live trading involves real money and real risk. The LUCIFER team accepts no responsibility for financial losses. Only trade with money you can afford to lose. Start with small trade sizes and increase gradually as you gain confidence in the system's behaviour.
-
----
-
-## Running the Dashboard in Dev Mode
-
-If you are developing features for LUCIFER, you can run the frontend in hot-reload mode:
-
-```powershell
-# Terminal 1 — backend
-cd C:\projects\tradingbot
-venv_bot\Scripts\python.exe src\app.py
-
-# Terminal 2 — frontend dev server (hot reload)
-cd C:\projects\tradingbot\dashboard-new
-npm run dev
-```
-
-The frontend dev server runs on port 5173. It proxies API calls to the Flask backend on port 5443. Any change to `.jsx` files reloads instantly without rebuilding.
+> ⚠️ Live trading with real money carries risk. The authors accept no responsibility for financial losses. Never risk more than you can afford to lose.
 
 ---
 
 ## Security Checklist
 
-Work through this before exposing the dashboard to the internet:
+Before exposing the dashboard to the internet:
 
-- [ ] **Change the admin password** — Settings → Security & 2FA → Change Password
-- [ ] **Enable 2FA** — Settings → Security & 2FA → TOTP. Scan the QR code with Google Authenticator or similar. 2FA codes are also sent to Telegram.
-- [ ] **Use a strong `DASHBOARD_SECRET_KEY`** — at least 32 random characters. Generate one with: `python -c "import secrets; print(secrets.token_hex(32))"`
-- [ ] **Restrict `.env` file permissions** — right-click → Properties → Security → remove all users except your own account
-- [ ] **Do not commit `.env`** — verify it is listed in `.gitignore`
-- [ ] **Review TLS cert** — regenerate the cert if you change your IP or machine name
-- [ ] **Consider a VPN** rather than direct port-forwarding for remote access
-- [ ] **IG account type** — double-check `IG_ACCOUNT_TYPE` is `DEMO` until you are deliberately going live
-- [ ] **Review API key permissions** — all exchange API keys should have **trade** access only, never withdrawal
+- [ ] Change default admin password (Settings → Security & 2FA)
+- [ ] Enable 2FA (Settings → Security & 2FA → TOTP)
+- [ ] Restrict `.env` file permissions (only your user should be able to read it)
+- [ ] Do not commit `.env`, `data/settings.json`, or any file containing credentials
+- [ ] Use a strong, random `DASHBOARD_SECRET_KEY`
+- [ ] Consider a VPN rather than port-forwarding if possible
+- [ ] Review `ssl/` — regenerate the cert if you change your IP or hostname
 
 ---
 
 ## Troubleshooting
 
 ### Dashboard won't load
-1. Check `logs/dashboard.log` for errors
-2. Verify port 5443 is not in use: `netstat -aon | findstr :5443`
-3. If a certificate error in browser — open `https://localhost:5443`, click Advanced → Proceed anyway. If it persists, regenerate the cert with `mkcert`.
-4. If a Python import error — run `venv_bot\Scripts\pip install -r requirements.txt` again
+Check logs at `logs/dashboard.log`. Common causes:
+- Port 5443 already in use — stop any other process using that port
+- Certificate mismatch — regenerate with `mkcert`
+- Python import error on startup — run `pip install -r requirements.txt` again
 
-### Bot not connecting to an exchange
-1. Check the specific exchange log: `logs/bot_coinspot.log`, `logs/bot_swyftx.log`, etc.
-2. Verify API keys are correct in `.env` — no extra spaces or newlines
-3. Check the exchange's status page for outages
-4. For IG: confirm `IG_ACCOUNT_TYPE` matches the account type you have (DEMO vs LIVE)
+### Bot not connecting to exchange
+- Verify API keys are correct in `.env`
+- Check exchange status pages for outages
+- Look at `logs/bot_coinspot.log` for the specific error
 
 ### Ollama not responding
-1. Open PowerShell and run `ollama serve` — check it starts without errors
-2. Verify models are pulled: `ollama list`
-3. Check nothing else is on port 11434: `netstat -aon | findstr :11434`
-4. Restart the Ollama service from Windows Services if needed
+- Run `ollama serve` manually and check it starts
+- Verify the models are pulled: `ollama list` — you need `qwen3:8b` and `qwen2.5:14b`
+- Default endpoint is `http://localhost:11434` — check nothing else is on that port
 
-### Plugin not appearing in dashboard
-1. Check `plugin.json` is valid JSON (paste it into a JSON validator)
-2. Check the category field matches the folder location
-3. Run Plugin Doctor from Settings — it shows the specific error
-4. Check the browser developer console (F12) for JavaScript import errors
-5. Restart the dashboard
+### Brain Console shows no decisions
+- The Brain only runs a full debate when the MTF gate passes (2 of 3 timeframes bullish)
+- `WEAK_BULLISH (score +1/3)` in the LOG tab means it is waiting for better market alignment
+- Check the LOG tab — `MTF gate BLOCKED` is normal during flat or bearish conditions
 
-### Hyperopt service not available
-Install Optuna:
-```powershell
-venv_bot\Scripts\pip install optuna
+### Plugin not showing in dashboard
+- Check `plugin.json` syntax (valid JSON, all required fields present)
+- Run the Plugin Doctor from Settings to see specific errors
+- Check browser console for import errors in the widget
+- Rebuild the frontend: `npm run build` in `dashboard-new/`
+
+### "Hyperopt service not available"
+Optuna must be installed:
 ```
-
-### Supervisor not starting processes at login
-1. Open Task Scheduler → find "LUCIFER Supervisor" → check it ran (Last Run Result should be 0x0)
-2. Check `logs/supervisor.log` for errors
-3. Verify the PowerShell path in the task matches your actual PowerShell location
-4. Ensure you are using the python.org Python, not the Microsoft Store version
-
-### "Port 5443 already in use"
-A previous instance is still running. Find and kill it:
-```powershell
-netstat -aon | findstr :5443
-taskkill /PID <the_pid_shown> /F
+venv_bot\Scripts\pip install optuna
 ```
 
 ---
 
-## Updating LUCIFER
+## Upgrade Notes
 
-1. Stop all processes (supervisor, bot, dashboard)
-2. Copy in the new files (or pull with git)
-3. Reinstall dependencies:
-   ```powershell
-   venv_bot\Scripts\pip install -r requirements.txt
-   ```
-4. Rebuild the dashboard:
-   ```powershell
-   cd dashboard-new
-   npm install
-   npm run build
-   ```
+When updating LUCIFER:
+1. Stop all running processes (`restart_all.ps1` or kill via supervisor)
+2. Copy new files over the existing installation
+3. Run `pip install -r requirements.txt` (dependencies may have changed)
+4. Run `npm install && npm run build` in `dashboard-new/`
 5. Restart the supervisor
 
-Plugin files in `src/plugins/` are never overwritten by updates — your custom plugins and any edits to existing plugins survive the update.
+Plugin files in `src/plugins/` are preserved across updates — your plugin customisations are not overwritten.
 
 ---
 
@@ -500,48 +367,42 @@ Plugin files in `src/plugins/` are never overwritten by updates — your custom 
 
 ```
 C:\projects\tradingbot\
-│
-├── bot.py                        Main trading runtime
-├── requirements.txt              Python dependencies
-├── .env                          Your credentials (never commit this)
-│
-├── src\
-│   ├── app.py                    Flask application entry point
-│   ├── api\                      Flask blueprints (core API routes)
-│   └── plugins\                  264+ plugin folders
-│       ├── exchanges\
-│       ├── ai\
-│       ├── data_sources\
-│       ├── indicators\
-│       ├── strategies\
-│       ├── risk_rules\
-│       ├── notifications\
-│       └── services\
-│
-├── dashboard-new\
-│   ├── src\                      React frontend source
-│   └── dist\                     Built frontend (served by Flask)
-│
-├── services\                     Shared Python service modules
-├── data\                         Runtime data (JSON state files, settings)
-├── logs\                         Log files (bot, dashboard, supervisor)
-│
-├── scripts\
-│   └── supervisor.ps1            Process supervisor — auto-start at login
-│
-├── ssl\
-│   ├── cert.pem                  TLS certificate
-│   └── key.pem                   TLS private key
-│
-└── docs\
-    └── public\                   This documentation
+  bot.py                    — Crypto trading runtime (CoinSpot, Swyftx, Bybit)
+  ig_bot.py                 — IG Markets CFD trading runtime
+  dashboard.py              — Flask application entry point
+  services/                 — Shared Python services
+    ai_brain_loop.py        — Autonomous Brain debate loop
+    ai_decision_engine.py   — 7-agent debate pipeline
+    exit_debate.py          — Intelligent exit debate engine
+    reflection_engine.py    — Nightly ReasoningBank reflection (2am)
+    reasoning_bank.py       — Local RAG memory for the Brain
+    watchlist_mtf.py        — Multi-timeframe signals from watchlist data
+    watchlist_discovery.py  — Discovery pipeline (paper evaluation of new coins)
+  src/
+    plugins/                — 278+ plugin folders (auto-discovered)
+  dashboard-new/
+    src/                    — React frontend source
+    dist/                   — Built frontend (served by Flask)
+  data/                     — Runtime data (JSON state files)
+    brain_orders.json       — Live Brain buy queue (crypto)
+    brain_orders_ig.json    — Live Brain buy queue (IG)
+    exit_debates.json       — Open position exit debate state
+    decision_ledger.json    — Full audit trail of all Brain decisions
+    reasoning_bank.json     — Accumulated learned patterns
+    watchlist_state.json    — 72-coin watchlist with price history
+  logs/                     — Log files
+    bot_coinspot.log        — Main crypto bot log
+    ig_bot.log              — IG Markets bot log
+    dashboard.log           — Dashboard log
+  scripts/
+    supervisor.ps1          — Process supervisor (auto-start at logon)
+    restart_all.ps1         — Kill all processes and let supervisor restart
+  ssl/
+    cert.pem / key.pem      — TLS certificate
+  docs/
+    public/                 — This documentation
 ```
 
 ---
 
-## Getting Help
-
-- Email: **lucifersdevteam@gmail.com**
-- See [README.md](README.md) for platform overview
-- See [PLUGINS.md](PLUGINS.md) for plugin catalogue
-- See [STRATEGIES.md](STRATEGIES.md) for all 139 strategy descriptions
+Contact: lucifersdevteam@gmail.com

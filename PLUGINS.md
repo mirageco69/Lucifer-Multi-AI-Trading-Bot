@@ -1,291 +1,227 @@
 # LUCIFER Plugin Catalogue
 
-> **264+ active plugins** · WordPress-style auto-discovery · No restart required to add a plugin
+> **264+ active plugins** · Auto-discovered at startup · No restart required to add a new plugin
 
----
-
-## How the Plugin System Works
-
-LUCIFER's plugin system is modelled on WordPress. Every feature — exchanges, AI agents, data sources, indicators, strategies, risk rules, notifications, and dashboard widgets — is a plugin.
-
-A plugin is a folder containing three files:
+LUCIFER uses a WordPress-style plugin architecture. Every feature is a plugin: exchanges, AI agents, data sources, indicators, strategies, risk rules, and dashboard widgets. Adding a plugin means dropping three files into `src/plugins/<category>/<name>/`:
 
 ```
-src/plugins/<category>/<plugin_name>/
-  plugin.json    — metadata: name, label, category, widget slot, enabled flag
-  api.py         — Flask Blueprint (backend API routes)
-  widget.jsx     — React component (dashboard widget)
+plugin.json   — metadata (name, label, category, widget slot)
+api.py        — Flask blueprint (backend routes)
+widget.jsx    — React component (dashboard widget)
 ```
 
-At startup, the platform scans `src/plugins/**` and auto-registers every folder that contains a valid `plugin.json`. No manual registration. No config file to edit. Drop the folder in, restart, and the plugin appears in the dashboard.
-
-Plugins can be:
-- **Enabled / disabled** from the Plugin Manager without touching code
-- **Certified** — marked as production-ready after passing quality checks
-- **Categorised** — exchanges, ai, data_sources, indicators, strategies, risk_rules, notifications, services
-
----
-
-## Plugin Manager
-
-The Plugin Manager is accessible from the Settings workspace. It shows:
-- All installed plugins with their category, version, and enabled/disabled state
-- Enable / disable toggle per plugin (takes effect on next bot cycle)
-- Certified badge for plugins that have passed quality review
-- Plugin count by category
-
-![Plugin Manager — 264+ plugins across all categories](Images/plugins.png)
-
----
-
-## Plugin Doctor
-
-The Plugin Doctor scans all installed plugins and produces a health report:
-
-| Check | What It Looks For |
-|---|---|
-| **Missing files** | `plugin.json`, `api.py`, or `widget.jsx` absent |
-| **Invalid JSON** | Malformed `plugin.json` |
-| **Missing fields** | Required fields not present in `plugin.json` |
-| **Category mismatch** | `plugin.json` category doesn't match folder location |
-| **Import errors** | Python errors caught when loading `api.py` at startup |
-| **Blueprint conflicts** | Two plugins registering the same API route |
-
-Results are colour-coded — red (broken), amber (warning), green (passing). Run it any time from Settings → Plugin Doctor.
+The platform discovers and loads them automatically. Disabling a plugin in the Plugin Manager removes it from the UI and API without touching any other code.
 
 ---
 
 ## Exchange Plugins
 
-Each exchange plugin manages its own authentication, order placement, lot tracking, and P&L accounting independently.
+These plugins connect LUCIFER to trading exchanges. Each manages its own authentication, order placement, lot tracking, and P&L.
 
-### CoinSpot (`coinspot` / `coinspot_exchange`)
-- **Exchange**: CoinSpot (Australia)
-- **Asset class**: Cryptocurrency (AUD pairs)
-- **API**: CoinSpot V2 REST API
-- **Auth**: API key + HMAC secret
-- **Order types**: Market orders (instant buy/sell)
-- **Features**: Lot-based FIFO buy tracking, realised P&L per lot, nonce-locked to prevent race conditions, auto-cancel of stale open orders after configurable hours
-- **Fee**: 0.01% per side (0.02% round-trip)
-- **Status**: Active — primary crypto exchange
-
-### Swyftx (`swyftx` / `swyftx_exchange`)
-- **Exchange**: Swyftx (Australia)
-- **Asset class**: Cryptocurrency (AUD pairs)
-- **API**: Swyftx REST API
-- **Auth**: JWT token
-- **Features**: Full order management, lot tracking, P&L
-- **Status**: Active
-
-### Bybit (`bybit` / `bybit_exchange`)
-- **Exchange**: Bybit
-- **Asset class**: Cryptocurrency (USDT pairs)
-- **API**: Bybit V5 REST API
-- **Auth**: API key + secret
-- **Order types**: Spot trading
-- **Status**: Active
-
-### IG Markets (`ig` / `ig_exchange`)
-- **Exchange**: IG Markets
-- **Asset class**: CFDs and commodities (COCOA, COFFEE, CORN, WHEAT, COPPER, XAGAUD, and more)
-- **API**: IG REST API
-- **Auth**: API key + username + password (DEMO or LIVE account)
-- **Features**: Tiered position holdings with configurable target sizes, full open position tracking, stop/limit order support, P&L per position
-- **Account types**: DEMO (default for testing) or LIVE
-- **Status**: Active — commodity and CFD trading
-
-### Paper Exchange (`paper_exchange`)
-- **Purpose**: Full simulation using real live market data
-- **Simulates**: All exchanges simultaneously
-- **Features**: Real AI gate decisions, real strategy signals, real P&L tracking — no real orders placed
-- **Use**: Default mode for new installations. Switch to live when ready.
-
-### Coming Soon (Stubs)
-| Plugin | Exchange | Status |
-|---|---|---|
-| `binance_exchange` | Binance | Stub — not yet enabled |
-| `kraken_exchange` | Kraken | Stub — not yet enabled |
-| `ib_exchange` | Interactive Brokers | Stub — not yet enabled |
+| Plugin | Exchange | Asset Class | Notes |
+|---|---|---|---|
+| `coinspot` | CoinSpot | Crypto (AUD) | V2 REST API · Market + limit orders |
+| `swyftx` | Swyftx | Crypto (AUD) | JWT auth · Full order management |
+| `bybit` | Bybit | Crypto (USDT) | V5 API · Spot trading |
+| `ig` / `ig_exchange` | IG Markets | CFDs / Commodities | REST API · Tiered holdings |
+| `paper_exchange` | Paper Trading | All asset classes | Simulates all exchanges with real market data |
+| `binance_exchange` | Binance | Crypto | Stub — not yet enabled |
+| `kraken_exchange` | Kraken | Crypto | Stub — not yet enabled |
+| `ib_exchange` | Interactive Brokers | Equities / Futures | Stub — not yet enabled |
 
 ---
 
 ## AI Plugins
 
-### Ollama Integration (`ollama`)
-Core local LLM integration. Routes all AI calls to the local Ollama server running at `http://localhost:11434`. Handles model selection, timeout management, fallback to `phi3:mini` when the primary model times out, and response parsing.
+| Plugin | Purpose |
+|---|---|
+| `ollama` | Core Ollama integration — routes LLM calls to local models |
+| `local_ollama_advisor` | Pre-trade gate — validates every trade with structured LLM reasoning |
+| `claude_advisor` | Cloud AI gate — disabled (zero cloud API policy; local Ollama only) |
+| `ensemble` | Ensemble voting — combines multiple strategy signals into a weighted decision |
+| `ai_chat_assistant` | In-dashboard AI chat assistant |
+| `llm_prompts` | **LLM Prompt Editor** — edit all AI system prompts from the dashboard without touching Python files. Changes take effect immediately, no restart. |
+| `mc_ai_brain` | Mission Control — AI Brain status widget (last decision, open positions, MTF gate, opportunity) |
+| `brain_console` | **Brain Console** — live terminal feed of AI Brain decisions, debates, executor activity, and exit debate state. Tabs: All / Decisions / Log / Queue. |
 
-Primary models:
-- `llama3.1:8b` — main pre-trade gate model
-- `phi3:mini` — fast fallback on timeout
-- `qwen3-coder:30.5b` — vision-capable model for chart analysis
+### LLM Prompt Keys (editable from dashboard)
 
-### Local Ollama Advisor (`local_ollama_advisor`)
-The **Pre-Trade Gate** — validates every proposed trade before execution.
-
-How it works:
-1. Receives the trade proposal: coin, amount, current RSI, EMA direction, MACD, Fear & Greed, strategy name
-2. Constructs a prompt using the editable `pretrade_gate` system prompt
-3. Calls Ollama with the trade data
-4. Parses the JSON response: `{approved: true/false, confidence: 0-100, reasoning: "...", action: "BUY/SELL/HOLD"}`
-5. If `approved: false`, the trade is blocked. The reasoning is logged to the Reasoning Bank.
-
-The system prompt explicitly prohibits vague reasoning — the LLM must reference specific indicator values and risk factors. Responses like "looks good" are rejected.
-
-### Claude Advisor (`claude_advisor`)
-Cloud AI gate using the Anthropic Claude API as an alternative to local Ollama. Requires an `ANTHROPIC_API_KEY` in `.env`. Used when local LLMs are not available or when higher reasoning quality is needed for high-stakes decisions.
-
-### Ensemble Voting (`ensemble`)
-Combines signals from multiple strategies into a weighted vote. Each strategy gets a vote weight based on its recent win rate. The ensemble decision is the weighted majority. Reduces noise from individual strategy signals on volatile days.
-
-### AI Chat Assistant (`ai_chat_assistant`)
-An in-dashboard AI chat interface. Ask questions about the bot's performance, request analysis of recent trades, or get explanations of strategy decisions. Uses the local Ollama model by default; Claude API if configured.
-
-### LLM Prompt Editor (`llm_prompts`)
-Edit all AI system prompts from the dashboard. No Python files, no restart.
-
-**Editable prompts:**
-
-| Key | Agent | What It Controls |
+| Key | Agent | Group |
 |---|---|---|
-| `prebuy_filter` | Legacy single-agent filter | The original single-LLM pre-buy decision (BUY/SKIP) |
-| `agent_technical` | Technical analysis agent | How the Technical agent evaluates RSI, MACD, EMA, SuperTrend, ADX |
-| `agent_sentiment` | Sentiment analysis agent | Fear & Greed rules, macro alert rules, news interpretation |
-| `agent_risk` | Risk management agent | Drawdown, exposure, concentration, fee considerations |
-| `agent_vision` | Vision agent | Chart pattern identification instructions |
-| `pretrade_gate` | Pre-Trade Gate | Final approve/block decision with structured reasoning |
-| `visual_agent` | Visual Agent page | Chart screenshot analysis instructions |
-
-Each prompt shows its DEFAULT or CUSTOM status. Changes save to `data/llm_prompts.json` and take effect on the next trade.
+| `prebuy_filter` | Legacy single-agent pre-buy filter | Legacy |
+| `agent_technical` | Technical analysis agent | 4-Agent Panel |
+| `agent_sentiment` | Sentiment analysis agent | 4-Agent Panel |
+| `agent_risk` | Risk management agent | 4-Agent Panel |
+| `agent_vision` | Vision/chart agent | 4-Agent Panel |
+| `pretrade_gate` | Final pre-trade approval gate | AI Gate |
+| `visual_agent` | Dashboard Visual Agent page | Tools |
 
 ---
 
 ## Data Source Plugins
 
-These plugins fetch external data and make it available to strategies, AI agents, and the dashboard.
-
-| Plugin | Data | Source | Update Frequency |
-|---|---|---|---|
-| `fear_greed` | Crypto Fear & Greed Index (0–100) with label | Alternative.me | Every 30 minutes |
-| `crypto_news` | Latest cryptocurrency news aggregated from multiple feeds | Multiple RSS + APIs | Every 15 minutes |
-| `rss_crypto_news` | Raw RSS crypto news parser — CoinDesk, Cointelegraph, Decrypt | RSS feeds | Every 15 minutes |
-| `macro_news` | Macroeconomic and geopolitical headlines tagged MACRO/ | Financial news APIs | Every 30 minutes |
-| `sentiment_snapshot` | Point-in-time composite sentiment score | Internal aggregation | Per request |
-| `reddit_sentiment` | Sentiment scoring from r/CryptoCurrency, r/Bitcoin, r/ethereum | Reddit API | Every hour |
-| `influencer_feed` | Post monitoring for major crypto influencers | Social APIs | Every 30 minutes |
-| `coingecko_intel` | Trending coins, top gainers/losers, market caps | CoinGecko API | Every 15 minutes |
-| `market_chart` | OHLC candle data and price history for charting | Exchange APIs | Real-time |
-| `deribit_feed` | Options data — implied volatility, put/call ratio, open interest | Deribit API | Every 15 minutes |
-| `derivatives_feed` | Futures funding rates, open interest across major venues | Multiple APIs | Every 15 minutes |
-| `onchain_macro_feed` | On-chain indicators — whale movements, exchange inflows/outflows, HODL waves | Glassnode / on-chain APIs | Every hour |
-| `system_health_monitor` | CPU %, RAM %, disk usage, process uptime | Windows system calls | Every 60 seconds |
+| Plugin | Data Provided |
+|---|---|
+| `fear_greed` | Crypto Fear & Greed Index (Alternative.me) |
+| `crypto_news` | Latest crypto news aggregated from multiple feeds |
+| `rss_crypto_news` | RSS-based crypto news parser |
+| `macro_news` | Macroeconomic and geopolitical news (MACRO/ tagged) |
+| `sentiment_snapshot` | Point-in-time market sentiment composite |
+| `reddit_sentiment` | Reddit crypto subreddit sentiment scoring |
+| `influencer_feed` | Crypto influencer post monitoring |
+| `coingecko_intel` | CoinGecko market intelligence — trending, top gainers/losers (one bulk call per cycle, not per-coin) |
+| `watchlist_mtf` | Watchlist-derived multi-timeframe signal — aggregates 15-min price array into 1h/4h/6h bars. Replaces yfinance. No external API calls. |
+| `market_chart` | OHLC price data and chart feeds |
+| `deribit_feed` | Deribit options data — IV, put/call ratio |
+| `derivatives_feed` | Futures funding rates and open interest |
+| `onchain_macro_feed` | On-chain macro indicators (whale movements, exchange flows) |
+| `system_health_monitor` | CPU, RAM, disk, process health monitoring |
 
 ---
 
 ## Indicator Plugins
 
-Technical indicators computed on price data and exposed to strategies via the indicator registry.
+These plugins compute technical indicators on price data and make them available to strategies.
 
-| Plugin | Indicator | Key Parameters |
-|---|---|---|
-| `rsi` | Relative Strength Index | Period (default 14); <30 oversold, >70 overbought |
-| `ema` | Exponential Moving Average | Period (configurable — 9, 21, 50 common) |
-| `sma` | Simple Moving Average | Period (configurable) |
-| `macd` | MACD line, signal line, histogram | Fast 12, slow 26, signal 9 (defaults) |
-| `bollinger_bands` | Upper/lower bands + middle band | Period 20, stddev 2.0 (defaults) |
-| `atr` | Average True Range — volatility measurement | Period 14 |
-| `adx` | Average Directional Index + DI+/DI- | Period 14; >25 = strong trend |
-| `supertrend` | SuperTrend directional signal (bullish/bearish) | Period 10, multiplier 3.0 |
-| `stochastic_rsi` | Stochastic RSI oscillator (K/D lines) | RSI period 14, stoch period 14 |
-| `ichimoku` | Ichimoku Cloud — Tenkan, Kijun, Senkou A/B, Chikou | Standard 9/26/52 periods |
-| `vwap` | Volume Weighted Average Price — intraday mean reversion anchor | Resets daily |
-| `obv` | On-Balance Volume — volume-based momentum | Cumulative |
-| `swing_failure_pattern` | SFP detection — liquidity sweep that reverses | Configurable lookback |
-| `functional` | Utility helpers — rolling window functions, cross-over detection, divergence checks | — |
+| Plugin | Indicator |
+|---|---|
+| `rsi` | Relative Strength Index |
+| `ema` | Exponential Moving Average (configurable periods) |
+| `sma` | Simple Moving Average |
+| `macd` | MACD line, signal line, histogram |
+| `bollinger_bands` | Bollinger Bands with configurable stddev |
+| `atr` | Average True Range |
+| `adx` | Average Directional Index + DI+/DI- |
+| `supertrend` | SuperTrend directional signal |
+| `stochastic_rsi` | Stochastic RSI oscillator |
+| `ichimoku` | Ichimoku Cloud (Tenkan, Kijun, Senkou A/B, Chikou) |
+| `vwap` | Volume Weighted Average Price |
+| `obv` | On-Balance Volume |
+| `swing_failure_pattern` | SFP detection (liquidity sweep reversal) |
+| `functional` | Utility indicator helpers |
 
 ---
 
 ## Risk Rule Plugins
 
-Risk rules are evaluated on every potential trade. If any mandatory rule fails, the trade is blocked regardless of AI or strategy signal.
-
-### Core Risk Rules (`core`)
-The foundational risk layer:
-- **Max daily drawdown** — if portfolio loses more than X% today, trading stops until tomorrow
-- **Max total exposure** — caps total AUD committed to open positions
-- **Max position count** — limits number of simultaneous open positions
-- **Min trade size** — rejects trades below the minimum to avoid fee erosion
-- **Coin blacklist** — configurable list of coins to never trade
-- **Spread check** — verifies that the spread plus fees doesn't erase the expected edge
-
-### Fear-Weighted DCA (`fear_dca`)
-Scales DCA buy amounts with the Fear & Greed index:
-- Extreme Fear (≤ 25): multiply buy size by a configured upscale factor — statistically better entries
-- Fear (26–45): slight upscale
-- Neutral (46–55): standard size
-- Greed (56–75): standard or slight reduction
-- Extreme Greed (≥ 76): reduce buy size — contrarian caution
-
-### Standard DCA (`dca`)
-Dollar-cost averaging on price dips. Buys additional lots when price drops a configured percentage from the last buy. Configurable maximum lot count and minimum time between buys.
-
-### Trailing Stop-Loss (`trailing_stop`)
-Once a position reaches a configured profit threshold, the trailing stop activates:
-- Trail percentage configurable per exchange
-- Automatically updates the stop level as price moves up
-- Triggers sell when price falls back through the trailing level
-
-### Sell Decision Engine (`sell_decision`)
-Lot-based FIFO sell logic:
-- Identifies which lots to sell based on age (oldest first) or profit threshold
-- Calculates realised P&L per lot
-- Handles partial sells (sell only the profitable lots, hold the rest)
-- Integrates with take-profit targets and trailing stops
+| Plugin | Function |
+|---|---|
+| `core` | Core risk rules — exposure limits, daily drawdown, position count caps |
+| `fear_dca` | Fear-weighted DCA — increases buy size in Extreme Fear, reduces in Extreme Greed |
+| `dca` | Standard DCA rules — dollar-cost averaging on dips |
+| `trailing_stop` | Trailing stop-loss with configurable trail percentage |
+| `sell_decision` | Lot-based sell decision engine — FIFO P&L, take-profit targeting |
 
 ---
 
 ## Notification Plugins
 
-### Telegram (`telegram` / `telegram_notification`)
-Primary notification channel. Sends:
-- Trade executed (buy or sell) with full details
-- AI gate decision — approved or blocked, with reasoning summary
-- Daily P&L report (configurable time)
-- Stop-loss and trailing stop events
-- System health warnings (high CPU/RAM, process crash)
-- Bot started / stopped
-- 2FA codes when logging into the dashboard
-- Strategy change notifications
-
-Configuration: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
-
-### Webhook (`webhook_notification`)
-Generic outbound webhook. POSTs a JSON payload to any configured URL on trade events. Use for integrating with Slack, Discord, custom dashboards, or any webhook-capable service.
+| Plugin | Channel |
+|---|---|
+| `telegram` / `telegram_notification` | Telegram Bot — trade alerts, daily reports, AI decisions, 2FA codes |
+| `webhook_notification` | Generic webhook — POST trade events to any endpoint |
 
 ---
 
 ## Service Plugins
 
-### Exchange Ledger Sync (`exchange_ledger_sync`)
-Reconciles the local trade ledger against each exchange's official trade history:
-- Fetches trade history from exchange APIs
-- Compares against local `data/` records
-- Flags discrepancies
-- Can import missing trades from the exchange into the local ledger
+| Plugin | Function |
+|---|---|
+| `exchange_ledger_sync` | Syncs executed trades from exchange APIs into the local ledger |
+
+---
+
+## Strategy Plugins — Crypto (100+)
+
+Strategies are grouped into logical families. All can be individually enabled, backtested, hyperopt-tuned, and certified.
+
+### Momentum & Trend Following
+`adx_momentum_strategy` · `adx_trend_strategy` · `ema_crossover_strategy` · `ema_crossover_long_strategy` · `ema_crossover_medium_strategy` · `ema_scalp_strategy` · `donchian_strategy` · `donchian_turtle_strategy` · `breakout_strategy` · `atr_breakout_strategy` · `supertrend_strategy` · `elder_ray_strategy` · `momentum_breakout_strategy` · `momentum_oscillator_strategy` · `trend_following_strategy` · `multi_timeframe_trend_strategy`
+
+### Mean Reversion & Oscillators
+`bollinger_strategy` · `bollinger_breakout_strategy` · `bollinger_scalp_strategy` · `bollinger_squeeze_strategy` · `rsi_strategy` · `rsi_divergence_strategy` · `rsi_reversal_strategy` · `stochastic_rsi_strategy` · `cci_strategy` · `awesome_oscillator_strategy` · `mean_reversion_strategy` · `swing_failure_pattern_strategy`
+
+### DCA & Position Building
+`dca_strategy` · `dca_smart_strategy` · `dca_value_averaging_strategy` · `anti_martingale_strategy` · `equal_weight_rebalance_strategy`
+
+### AI & Machine Learning
+`ai_strategy` · `ensemble_voting_strategy` · `anomaly_detection_strategy` · `neural_network_strategy` · `reinforcement_learning_strategy` · `black_litterman_strategy` · `copula_strategy` · `entropy_strategy`
+
+### Regime-Aware
+`regime_strategy` · `drawdown_regime_strategy` · `correlation_regime_strategy` · `volatility_regime_strategy` · `market_regime_strategy` · `adaptive_regime_strategy`
+
+### Arbitrage & Rotation
+`exchange_arb_strategy` · `dex_arb_strategy` · `dominance_rotation_strategy` · `sector_rotation_strategy` · `multi_asset_rotation_strategy`
+
+### Advanced & SMC (Smart Money Concepts)
+`breaker_block_strategy` · `equal_highs_lows_strategy` · `order_block_strategy` · `liquidity_sweep_strategy` · `fair_value_gap_strategy` · `wyckoff_accumulation_strategy` · `multi_timeframe_strategy` · `cointegration_strategy`
+
+### Statistical & Research
+`hurst_exponent_strategy` · `monte_carlo_strategy` · `rule_significance_strategy` · `z_score_strategy` · `pairs_trading_strategy`
+
+*...and 50+ additional crypto strategy variants*
+
+---
+
+## Strategy Plugins — Commodity / CFD (30+)
+
+Purpose-built for IG Markets CFD trading across energies, metals, grains, and soft commodities.
+
+### Trend Following
+`cfd_trend_following_strategy` · `commodity_momentum_rotation_strategy` · `cfd_breakout_retest_strategy`
+
+### Mean Reversion & Range
+`cfd_mean_reversion_strategy` · `cfd_range_strategy` · `cfd_scalp_strategy`
+
+### Carry & Term Structure
+`cfd_carry_trade_strategy` · `commodity_term_structure_strategy`
+
+### Calendar Spreads
+`commodity_calendar_spread_strategy` · `seasonal_roll_strategy`
+
+### Relative Value
+`cfd_correlation_strategy` · `commodity_relative_value_strategy` · `inter_commodity_spread_strategy`
+
+### Seasonality
+`commodity_seasonality_strategy` · `agricultural_seasonal_strategy` · `energy_seasonal_strategy`
+
+### Fundamental / Macro
+`commodity_fundamentals_strategy` · `supply_demand_strategy` · `cfd_news_straddle_strategy`
+
+### Risk Management for CFDs
+`cfd_hedging_strategy` · `cfd_gap_trading_strategy`
+
+---
+
+## Plugin Doctor
+
+The Plugin Doctor is a built-in diagnostics tool accessible from the Settings workspace. It scans all installed plugins and reports:
+
+- Plugins missing required files (`plugin.json`, `api.py`, `widget.jsx`)
+- Category mismatches between `plugin.json` and folder location
+- Blueprint compliance gaps (missing required fields)
+- Import errors caught at startup
+- Plugins disabled vs enabled count
+
+Warnings are colour-coded: **red** for errors that will prevent a plugin working, **amber** for compliance warnings, **green** for passing checks.
 
 ---
 
 ## Adding a New Plugin
 
-1. Create the folder: `src/plugins/<category>/<plugin_name>/`
-2. Write `plugin.json`:
+1. Create `src/plugins/<category>/<plugin_name>/`
+2. Add `plugin.json` (see template below)
+3. Add `api.py` with a Flask Blueprint at `/api/<plugin_name>`
+4. Add `widget.jsx` exporting a named component matching `widget.component`
+5. Restart the dashboard (or hot-reload if in dev mode)
 
 ```json
 {
   "name": "my_plugin",
   "label": "My Plugin",
-  "description": "What this plugin does in one sentence.",
+  "description": "What this plugin does.",
   "version": "1.0.0",
-  "author": "Your Name",
+  "author": "LUCIFER",
   "enabled": true,
   "certified": false,
   "category": "data_sources",
@@ -297,29 +233,4 @@ Reconciles the local trade ledger against each exchange's official trade history
 }
 ```
 
-3. Write `api.py` — a Flask Blueprint:
-
-```python
-from flask import Blueprint, jsonify
-bp = Blueprint("my_plugin", __name__)
-
-@bp.route("/api/my-plugin/data", methods=["GET"])
-def get_data():
-    return jsonify({"value": 42})
-```
-
-4. Write `widget.jsx` — a React component:
-
-```jsx
-export function MyPluginWidget() {
-  return <div>My Plugin</div>;
-}
-```
-
-5. Restart the dashboard. The plugin appears automatically.
-
-Valid categories: `exchanges`, `ai`, `data_sources`, `indicators`, `strategies`, `risk_rules`, `notifications`, `services`
-
----
-
-*For a full list of strategy plugins, see [STRATEGIES.md](STRATEGIES.md)*
+The platform picks it up automatically — no registration required.
