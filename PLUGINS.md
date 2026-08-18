@@ -35,14 +35,52 @@ These plugins connect LUCIFER to trading exchanges. Each manages its own authent
 
 | Plugin | Purpose |
 |---|---|
-| `ollama` | Core Ollama integration — routes LLM calls to local models |
-| `local_ollama_advisor` | Pre-trade gate — validates every trade with structured LLM reasoning |
-| `claude_advisor` | Cloud AI gate — disabled (zero cloud API policy; local Ollama only) |
+| `ollama` | Core Ollama integration — routes all LLM calls to local Ollama models. No cloud API calls are ever made. |
+| `local_ollama_advisor` | Pre-trade gate — validates every trade with structured LLM reasoning before the Brain was introduced. Now superseded by the Brain for buy decisions. |
+| `claude_advisor` | Cloud AI gate — **disabled** (zero cloud API policy; local Ollama only) |
 | `ensemble` | Ensemble voting — combines multiple strategy signals into a weighted decision |
 | `ai_chat_assistant` | In-dashboard AI chat assistant |
 | `llm_prompts` | **LLM Prompt Editor** — edit all AI system prompts from the dashboard without touching Python files. Changes take effect immediately, no restart. |
-| `mc_ai_brain` | Mission Control — AI Brain status widget (last decision, open positions, MTF gate, opportunity) |
-| `brain_console` | **Brain Console** — live terminal feed of AI Brain decisions, debates, executor activity, and exit debate state. Tabs: All / Decisions / Log / Queue. |
+| `mc_ai_brain` | **AI Brain Widget** — Mission Control status card showing last decision, open positions, MTF gate result, and opportunity score. |
+| `brain_console` | **Brain Console** — live terminal feed of every AI Brain decision, exit debate, executor order, and log line. Colour-coded by action. Tabs: All / Decisions / Log / Queue. |
+
+### AI Brain Architecture
+
+The AI Brain is the platform's autonomous trading intelligence. All inference runs locally on Ollama — `qwen3:8b` for the 6 real-time debate agents, `qwen2.5:14b` for the Risk Manager and nightly reflection.
+
+**Data flow:**
+```
+Market data + watchlist + ReasoningBank
+        ↓
+  MTF Gate (1h / 4h / 6h alignment check)
+        ↓  pass (≥ 2/3 bullish)
+  6-Agent Debate Panel (parallel)
+        ↓
+  Risk Manager veto (qwen2.5:14b, ReasoningBank-informed)
+        ↓  approved
+  Portfolio Manager → brain_orders.json queue
+        ↓
+  BrainExecutor thread → place_buy() → exchange
+```
+
+**Key files:**
+
+| File | Purpose |
+|---|---|
+| `services/ai_brain_loop.py` | Main autonomous loop — gates, cooldown, execution |
+| `services/ai_decision_engine.py` | 7-agent debate pipeline |
+| `services/ai_context_builder.py` | Builds full market context for each debate |
+| `services/exit_debate.py` | 2-agent exit debate engine (replaces fixed stop-loss) |
+| `services/reasoning_bank.py` | Local RAG memory — add / retrieve / update learned patterns |
+| `services/decision_ledger.py` | Full audit trail of every Brain decision and outcome |
+| `services/reflection_engine.py` | 2am nightly reflection — extracts patterns into ReasoningBank |
+| `services/watchlist_mtf.py` | Multi-timeframe signals from watchlist price array (no external API) |
+| `services/watchlist_discovery.py` | 4-hourly paper evaluation of watchlist candidates |
+| `data/brain_orders.json` | Live buy queue — Brain writes, executor reads |
+| `data/brain_orders_ig.json` | Live buy queue for IG Markets |
+| `data/exit_debates.json` | Open position exit debate state (floor, hold count) |
+| `data/reasoning_bank.json` | Accumulated learned patterns |
+| `data/decision_ledger.json` | Full decision history with outcomes |
 
 ### LLM Prompt Keys (editable from dashboard)
 

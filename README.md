@@ -68,24 +68,94 @@ Mission Control Brain status widget — last decision, open positions, MTF gate 
 Trade the same strategy across CoinSpot (crypto, AUD), Swyftx (crypto, AUD), Bybit (crypto, USDT), and IG Markets (CFDs/commodities) simultaneously. Each exchange has its own plugin with independent lot tracking, P&L, and order management.
 
 ### 7-Agent Autonomous AI Brain
-Every trade decision goes through a full multi-agent debate running on local Ollama (no cloud):
-- **Technical Analyst** — RSI, MACD, EMA, multi-timeframe alignment
-- **Sentiment Analyst** — Fear & Greed index, news, macro events
-- **Fundamental Analyst** — portfolio exposure, cash, open positions
-- **Bull Researcher** — strongest case for entering the trade
-- **Bear Researcher** — strongest case against entering the trade
-- **Risk Manager** (qwen2.5:14b) — final veto, ReasoningBank-informed, cannot be overruled
-- **Portfolio Manager** — final position size and execution instruction
 
-The brain is the **sole buy authority**. Bot signal-triggered buys are blocked when the Brain is enabled. Orders are queued to `brain_orders.json` and executed by a dedicated executor thread.
+LUCIFER's AI Brain is a fully autonomous trading intelligence built entirely on local LLMs — no cloud API calls, no subscriptions, no data leaving your machine. It runs 24/7 on [Ollama](https://ollama.com), debating every potential trade through a structured 7-agent panel before a single order is placed.
 
-**Intelligent exit logic** replaces fixed stop-losses. When a position hits −3%, the Brain runs a 2-agent debate (Recovery Analyst + Risk Arbiter) consulting the ReasoningBank, trade history, MTF signal, regime, Fear & Greed, and market breadth before deciding to hold or cut. The floor tightens on each HOLD (−3% → −6% → −8% → −10%). Hard exits bypass debate: regime flip to BEAR, −10%, 7-day hold cap, +12% profit cap.
+#### The Brain is the sole buy authority
 
-**Watchlist discovery** feeds the Brain's paper portfolio. The 72-coin watchlist's best candidates are evaluated by the Brain every 4 hours. BUY decisions go to a paper portfolio only. After 3 paper wins, a Telegram alert suggests promoting the coin to the live list.
+When the Brain is enabled, the bot's own signal-triggered buys are completely blocked. Every buy decision flows through the debate pipeline and is placed by a dedicated executor thread — not the strategy engine. This eliminates conflicting buy paths and ensures every open position has a full reasoning trail behind it.
 
-**Research → Brain pipeline**: when the research agent promotes a strategy or the optimizer switches a coin's strategy, findings are automatically written to the ReasoningBank so the Brain consults them in future debates.
+#### The 7-Agent Debate Panel
 
-The Brain also learns — after every trade closes, a nightly reflection (2am) extracts patterns into the ReasoningBank.
+Each trade candidate triggers a parallel debate across six specialist agents, with a final Risk Manager adjudicating:
+
+| Agent | Model | Role |
+|---|---|---|
+| **Technical Analyst** | qwen3:8b | RSI, MACD, EMA, Bollinger, multi-timeframe alignment |
+| **Sentiment Analyst** | qwen3:8b | Fear & Greed index, crypto news sentiment, macro events |
+| **Fundamental Analyst** | qwen3:8b | Portfolio exposure, open positions, available cash, correlation |
+| **Bull Researcher** | qwen3:8b | Builds the strongest possible case FOR entering the trade |
+| **Bear Researcher** | qwen3:8b | Builds the strongest possible case AGAINST entering the trade |
+| **Risk Manager** | qwen2.5:14b | Reads all 5 agent reports + ReasoningBank history. Final veto — cannot be overruled |
+| **Portfolio Manager** | qwen3:8b | Calculates position size (ATR + Kelly criterion), writes the execution order |
+
+The debate takes 3–8 minutes per coin. If Ollama is busy or slow, the Brain waits and retries — it never skips the debate to place a faster order.
+
+#### Multi-Timeframe Gate
+
+Before the debate even starts, the Brain checks multi-timeframe alignment across 1h, 4h, and 6h timeframes derived from the watchlist's live price array (no external API calls). A coin must be bullish on at least 2 of 3 timeframes to proceed. `WEAK_BULLISH (score +1/3)` means the gate is blocked — the Brain checks again on the next cycle rather than debating a weak setup.
+
+#### Intelligent Exit Debates
+
+Fixed stop-losses are replaced entirely by AI-driven exit debates. When an open position hits a loss threshold, the Brain runs a 2-agent debate before deciding whether to cut or hold:
+
+- **Recovery Analyst** — argues for holding, checks ReasoningBank for similar past recoveries, reviews MTF signal, market regime, Fear & Greed, and market breadth
+- **Risk Arbiter** — challenges the recovery case, makes the final call
+
+**Loss-side thresholds:**
+
+| Loss | Action |
+|---|---|
+| −3% | Exit debate — hold or cut |
+| −6% | Exit debate — floor tightened after first HOLD |
+| −8% | Exit debate — floor tightened after second HOLD |
+| −10% | Hard exit — no debate, always cuts |
+| Regime → BEAR | Hard exit — always exits immediately |
+| 7 days held | Force close — no debate |
+
+**Profit-side thresholds:**
+
+| Profit | Action |
+|---|---|
+| +3%, +5%, +8% | Profit debate — hold or take profit |
+| +12% | Hard exit — locks in gains, no debate |
+
+Each HOLD tightens the floor. After 3 HOLDs the position is force-closed regardless. This prevents the Brain from holding a losing position indefinitely while still giving recoveries a chance.
+
+#### The ReasoningBank — How the Brain Learns
+
+Every night at 2am, the Brain runs a nightly reflection using `qwen2.5:14b` — its deepest reasoning model. It reviews all closed trades from the day and extracts structured patterns:
+
+- What conditions, signals, and reasoning led to winning trades
+- What was missed or misleading in losing trades
+- Calibration checks — were high-confidence decisions actually more accurate?
+
+These patterns are stored in a local RAG memory called the **ReasoningBank** (`data/reasoning_bank.json`). Every future debate injects the most relevant ReasoningBank entries into the Risk Manager's context, so the Brain's past experience directly influences its next decision.
+
+The ReasoningBank also grows from three other sources:
+- **Research Agent** — writes findings when it promotes a strategy to production
+- **Strategy Optimizer** — writes the rationale when it switches a coin's strategy
+- **Exit Debates** — records whether each hold-or-cut decision was correct after the position closes
+
+#### Watchlist Discovery Pipeline
+
+The Brain doesn't just trade the coins you've configured — it actively scouts for new opportunities. Every 4 hours, it evaluates the top candidates from a 72-coin watchlist and runs a full debate on each one. BUY decisions from discovery go to a **paper portfolio only** (never the live queue). After 3 paper wins for a coin, the Brain sends a Telegram alert suggesting it be promoted to the live list.
+
+#### IG Markets Brain
+
+The same Brain architecture extends to IG Markets CFD trading. A dedicated `IG-Brain` thread cycles through all configured instruments every 30 minutes during market hours (Mon–Fri, 8am–10pm AEST). IG Brain orders queue to `brain_orders_ig.json` and are picked up by a separate `IG-BrainExecutor` thread. The Brain checks whether the IG session is open before debating any instrument.
+
+#### Brain Console
+
+The Brain Console (visible in Mission Control) is a live terminal feed showing every Brain decision in real time, colour-coded by action type:
+
+- 🟢 **Green** — BUY decision
+- 🟡 **Yellow** — HOLD (exit debate held, position kept)
+- 🔴 **Red** — EXIT (position cut)
+- 🟣 **Purple** — DEBATE (exit or profit debate in progress)
+- ⬜ **Grey** — BLOCK (MTF gate or other pre-debate filter blocked the coin)
+
+Four tabs: **All** (merged chronological feed) · **Decisions** (ledger) · **Log** (filtered bot log) · **Queue** (executor order status).
 
 ### Strategy Engine (139+ Strategies)
 Strategies are organised into two asset-class groups:
@@ -145,7 +215,7 @@ Full paper-trading mode using real live market data. Switches to dry-run at the 
 | **Backend** | Python 3.11+ · Flask · APScheduler |
 | **Frontend** | React 18 · Vite · CSS Variables (5 themes) |
 | **Database** | JSON flat-file store (data/) · SQLite for research |
-| **AI** | Ollama (local LLMs) · Claude API (cloud, optional) |
+| **AI** | Ollama (local LLMs only) · qwen3:8b · qwen2.5:14b · mistral-nemo:12b |
 | **Exchanges** | REST APIs — CoinSpot V2 · Swyftx JWT · Bybit V5 · IG Markets REST |
 | **Hosting** | Self-hosted Windows · HTTPS on port 5443 · mkcert TLS |
 | **Notifications** | Telegram Bot API |
